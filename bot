@@ -1,0 +1,130 @@
+import telebot
+from telebot import types
+import data
+
+bot = telebot.TeleBot('5518362959:AAE512gapIbQlYBEL2Nk8jiGY0TUf70JMPg')
+
+user_cart = {}
+
+@bot.message_handler(commands=['start'])
+def start(message):
+    user = data.check_user()
+    user_id = message.from_user.id
+    if user_id not in user:
+        mess = f'Привет <b><u>{message.from_user.first_name}</u></b>! Я бот службы доставки booky_uz!'
+        mess_2 = 'Пожалуйста, введите свой номер телефона, чтобы зарегистрироваться!\nНапример, +998xx xxx xx xx'
+        kb = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+        reg_button = types.KeyboardButton(text="Отправить номер телефона", request_contact=True)
+        kb.add(reg_button)
+        bot.send_message(message.from_user.id, mess, parse_mode='html')
+        bot.send_message(message.from_user.id, mess_2, reply_markup=kb)
+        bot.register_next_step_handler(message, register)
+    elif user_id in user:
+        kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+        item_1 = types.KeyboardButton('🛒 Начать заказ')
+        item_2 = types.KeyboardButton('✍ Оставить отзыв')
+        kb.add(item_1, item_2)
+        mess = f'Привет <b><u>{message.from_user.first_name}</u></b>! Я бот службы доставки booky_uz!'
+        bot.send_message(message.from_user.id, mess, parse_mode='html', reply_markup=kb)
+
+
+def register(message):
+    data.register(message.from_user.id, message.contact.phone_number or message.text)
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    item_1 = types.KeyboardButton('🛒 Начать заказ')
+    item_2 = types.KeyboardButton('✍ Оставить отзыв')
+    kb.add(item_1, item_2)
+    bot.send_message(message.from_user.id, 'Вы успешно зарегистрированы в системе!', reply_markup=kb)
+
+
+@bot.message_handler(content_types=['text'])
+def main(message):
+    if message.text == '🛒 Начать заказ':
+        keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        button_geo = types.KeyboardButton(text="Отправить местоположение", request_location=True)
+        keyboard.add(button_geo)
+        bot.send_message(message.chat.id, "Поделись местоположением", reply_markup=keyboard)
+        bot.register_next_step_handler(message, product)
+    elif message.text == '✍ Оставить отзыв':
+        pass
+    else:
+        product(message)
+
+
+def product(message):
+    if message.text == '🛒 Корзина':
+        cart = data.get_cart(message.from_user.id)
+        o = 'Ваша корзина\n\n'
+        for i in cart:
+            k = f'{i[1]}: {i[2]} сум\n'
+            o+=k
+        # kb_1 = types.ReplyKeyboardMarkup(True)
+        # item = types.KeyboardButton('oformit')
+        # item_1 = types.KeyboardButton('udalit')
+        # kb_1.add(item,item_1)
+        bot.send_message(message.from_user.id, o)
+
+    else:
+        kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+        products = data.get_products()
+        for i in products:
+            kb.add(i[0])
+        cart_kb = types.KeyboardButton('🛒 Корзина')
+        kb.add(cart_kb)
+        bot.send_message(message.from_user.id, 'Выберите товар', reply_markup=kb)
+        bot.register_next_step_handler(message, description)
+        # markup = types.InlineKeyboardMarkup()
+        # markup.row_width = 2
+        # o = [str(i) for i in products]
+        # for i in o:
+        #     markup.add(types.InlineKeyboardButton(i, callback_data=i))
+        # markup.add(types.InlineKeyboardButton(*o[0], callback_data='yes'))
+
+        # markup = types.InlineKeyboardMarkup()
+        # markup.row_width = 2
+        # for i in products:
+        #     markup.add(types.InlineKeyboardButton(i[0], callback_data=i[0]))
+        # bot.send_message(message.from_user.id, 'Выберите товар', reply_markup=markup)
+        bot.register_next_step_handler(message, description)
+
+
+def description(message):
+    products = [i[0] for i in data.get_products()]
+    if message.text == '🛒 Корзина':
+        cart = data.get_cart(message.from_user.id)
+        bot.send_message(message.from_user.id, str(cart))
+
+    if message.text in products:
+        user_id = message.from_user.id
+        about = [i for i in data.get_about(message.text)]
+        user_cart[user_id] = {}
+        user_cart[user_id]['Продукт'] = message.text
+        user_cart[user_id]['Цена'] = about[0][1]
+        count_kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=3)
+        o = [str(i) for i in range(1, 11)]
+        count_kb.add(*o)
+        bot.send_photo(message.from_user.id, photo=about[0][2], caption=f'{about[0][-1]}\n\nЦена: {about[0][1]} сум')
+        bot.send_message(user_id, f'Выберите количсество: ', reply_markup=count_kb)
+        bot.register_next_step_handler(message, add_to_cart)
+    else:
+        product(message)
+
+def add_to_cart(message):
+    quan = message.text
+    product_name = user_cart[message.from_user.id]['Продукт']
+    product_price = user_cart[message.from_user.id]['Цена']
+    user_cart[message.from_user.id]['Количсество'] = quan
+    data.add_cart(message.from_user.id, product_name, product_price, quan)
+    bot.send_message(message.from_user.id, 'Товар успешно добавлен в корзину')
+    bot.send_message(message.from_user.id, f'{user_cart[message.from_user.id]["Продукт"]}')
+    product(message)
+
+
+# @bot.message_handler(content_types=['location'])
+# def location (message):
+#     if message.location is not None:
+#         bot.send_message(message.from_user.id, f"latitude: {message.location.latitude}; longitude: {message.location.longitude}")
+#         bot.send_location(342668984, message.location.latitude, message.location.longitude)
+#
+
+bot.polling()
