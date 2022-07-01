@@ -2,7 +2,7 @@ import telebot
 from telebot import types
 import data
 
-bot = telebot.TeleBot('5518362959:AAE512gapIbQlYBEL2Nk8jiGY0TUf70JMPg')
+bot = telebot.TeleBot('362959:AAE512gapIbQlYBEL2Nk8jiGY0TUf70JMPg')
 
 user_cart = {}
 
